@@ -10,3 +10,15 @@ input:
 output:
 
 - namespaces (like [here](http://0agr.ru/wiki/index.php/Discovered_namespaces))
+
+
+## Dependencies 
+
+* Usual PyData Stack (numpy, scipy, sklearn). Best to use [anaconda](http://docs.continuum.io/anaconda/install) installer 
+* FuzzyWuzzy
+
+
+Installing extra dependecies (not from anaconda): 
+
+    pip install fuzzywuzzy
+     
