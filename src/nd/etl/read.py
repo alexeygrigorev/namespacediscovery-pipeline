@@ -96,7 +96,7 @@ def read_categories(path):
 
 
 def read_mlp_output(mlp_output_dir, doc_categories):
-    log.debug('reading MLP output...')
+    log.debug('reading MLP output from %s...' % mlp_output_dir)
     docs = []
     titles = []
     ids = []
