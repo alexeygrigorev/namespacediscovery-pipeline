@@ -16,6 +16,11 @@ from itertools import groupby
 from fuzzywuzzy import fuzz, process
 
 
+def create_evaluator(data):
+    return Evaluator(data.document_titles, data.document_identifiers, 
+        data.document_relations, data.document_categories)
+
+
 class Evaluator:
     doc_titles = None
     doc_ids = None
@@ -27,10 +32,10 @@ class Evaluator:
         docfreq_definitions = Counter()
 
         for rel_set in doc_ids_definitions:
-            for id, def_list in rel_set.items():
+            for _, def_list in rel_set.items():
                 docfreq_definitions.update(set(d for d, s in def_list))
 
-    
+
     def _category_docfreq_calculate(self, doc_categories):
         docfreq_categories = Counter()
         
@@ -39,7 +44,7 @@ class Evaluator:
             docfreq_categories.update(categories)
 
         return {d: np.log(s + 1) for d, s in docfreq_categories.items()}
-    
+
 
     def __init__(self, doc_titles, doc_ids, doc_ids_definitions, doc_categories):
         self.doc_titles = doc_titles
@@ -49,7 +54,6 @@ class Evaluator:
         self.doc_df_categories = self._category_docfreq_calculate(doc_categories)
 
         self._def_docfreq_calculate(doc_ids_definitions)
-        
 
     def cluster_purity(self, indices):
         if indices.dtype == 'bool':
