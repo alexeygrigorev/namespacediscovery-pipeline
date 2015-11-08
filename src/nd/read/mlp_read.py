@@ -14,7 +14,7 @@ from collections import Counter
 from collections import defaultdict
 
 import logging
-log = logging.getLogger('nd.etl.read')
+log = logging.getLogger('nd.read')
 
 
 def id_counter(id_list):
@@ -141,9 +141,6 @@ def read_mlp_output(mlp_output_dir, doc_categories):
     return titles, ids, rels
 
 
-
-
-
 def build_doc_category_list(doc_categories, category_docs, titles, title_idx):
     # processing category information 
     # so we don't keep category information for documents we don't have
@@ -242,6 +239,7 @@ class InputData():
                 del id_cnt[id]
 
         log.debug('removed')
+
 
 
 if __name__ == '__main__':

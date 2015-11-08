@@ -74,7 +74,7 @@ class Evaluator:
         category, cat_cnt = cluster_cats.most_common()[0]
         return 1.0 * cat_cnt / size, category
 
-    
+
     def cluster_categories(self, indices):
         if indices.dtype == 'bool':
             indices, = np.where(indices)
@@ -104,7 +104,8 @@ class Evaluator:
         return purity.dot(sizes)
 
 
-    def high_purity_clusters(self, cluster_assignment, threshold, min_size=5, k=None, all_categories=0):
+    def high_purity_clusters(self, cluster_assignment, threshold, min_size=5, 
+                             k=None, all_categories=0):
         if not k:
             k = cluster_assignment.max()
 
@@ -126,30 +127,34 @@ class Evaluator:
         return cluster_ids
 
 
-    def report_overall(self, cluster_assignment, purity_threshold, min_size=5, k=None, sort_by='purity'):
+    def report_overall(self, cluster_assignment, purity_threshold, min_size=5, 
+                       k=None, sort_by='purity'):
         pure_clusters = self.high_purity_clusters(cluster_assignment, purity_threshold, min_size, k)
         
         print 'overall purity %0.4f' % self.overall_purity(cluster_assignment)
-        print 'number of high purity clusters of size at least 5 is %d' % len(pure_clusters)
+        print 'number of high purity clusters of size at least %d is %d' % \
+                         (min_size, len(pure_clusters))
         print
 
         pure_clusters = sorted(pure_clusters, key=operator.itemgetter(sort_by), reverse=True)
-        
+
         for desc in pure_clusters: 
             print '- %s (id=%d) size=%d, purity=%0.4f' % \
                     (desc['category'], desc['cluster'], desc['size'], desc['purity'])
 
 
-    def find_identifier(self, cluster_assignment, purity_threshold, id, min_size=5, collection_weighting=0, scorer=None):
-        pure_clusters = self.high_purity_clusters(cluster_assignment, purity_threshold, min_size, k=None)
-        
+    def find_identifier(self, cluster_assignment, purity_threshold, id, 
+                        min_size=5, collection_weighting=0, scorer=None):
+        pure_clusters = self.high_purity_clusters(cluster_assignment, 
+                                                  purity_threshold, min_size, k=None)
+
         print 'overall purity %0.4f' % self.overall_purity(cluster_assignment)
         print 'number of high purity clusters of size at least 5 is %d' % len(pure_clusters)
         print
 
         for desc in pure_clusters: 
             cluster_id = desc['cluster']
-            
+
             indices, = np.where(cluster_assignment == cluster_id)
             size = len(indices)
 
@@ -169,7 +174,7 @@ class Evaluator:
 
             if not occurrences:
                 continue
-            
+
             top_categories = cluster_cats.most_common()[:5]
             print 'category "%s", cluster_id=%d, size=%d:' % (top_categories[0][0], cluster_id, size)
             print 'top categories:', top_categories
@@ -179,7 +184,7 @@ class Evaluator:
 
 
     def combine_def(self, definition_list, collection_weighting=0):
-        key = lambda tuple: tuple[0].lower()
+        key = lambda t: t[0].lower()
         sorted_by_def = sorted(definition_list, key=key)
 
         combined = []
@@ -205,7 +210,7 @@ class Evaluator:
 
         result = []        
         names = set(d.keys())
-        
+
         if scorer is None:
             scorer = fuzz.token_set_ratio
 
@@ -227,7 +232,6 @@ class Evaluator:
         resorted = sorted(result, key=operator.itemgetter(1), reverse=True)
         return resorted
 
-    
     def find_all_def(self, cluster_assignment, cluster_ids, scorer=None):
         if isinstance(cluster_ids, int):
             cluster_ids = [cluster_ids]
@@ -264,8 +268,10 @@ class Evaluator:
         combined = self.fuzzy_combine_def(pre_combined, scorer=scorer)
         return self._string_def_list(ident, combined)
 
-    def print_cluster(self, cluster_assignment, cluster_ids, collection_weighting=0, scorer=None, print_docs=1, sort_by_score=0,
-                     normalize_score=0, top_k_def=None, sort_docs=0):
+
+    def print_cluster(self, cluster_assignment, cluster_ids, collection_weighting=0, 
+                      scorer=None, print_docs=1, sort_by_score=0,
+                      normalize_score=0, top_k_def=None, sort_docs=0):
         if isinstance(cluster_ids, int):
             cluster_ids = [cluster_ids]
 
@@ -275,7 +281,7 @@ class Evaluator:
 
         for cluster_id in cluster_ids:
             indices, = np.where(cluster_assignment == cluster_id)
-            
+
             size = len(indices)
             if print_docs:
                 print 'cluster %d, size: %d' % (cluster_id, size)
@@ -306,7 +312,6 @@ class Evaluator:
         print 'common terms: (%s)' % ' '.join(common_terms)
         print 'top categories:', ', '.join(u'(%s, %d)' % (n, c) for n, c in cluster_cats.most_common()[:5])
 
-        
         most_common_cat, most_common_cat_count = cluster_cats.most_common()[0]
         print 'purity: %0.3f' % (1.0 * most_common_cat_count / size)
 
@@ -316,17 +321,17 @@ class Evaluator:
 
         if sort_by_score:
             all_defs = []
-            
+
             for ident, definit_list in all_rels:
                 pre_combined = self.combine_def(definit_list, collection_weighting=collection_weighting)
                 best = self.fuzzy_combine_def(pre_combined, scorer=scorer)[0]
                 all_defs.append((ident, self.__fuzzy_list_name(best[0]), best[1]))
-                
+
             all_defs = sorted(all_defs, key=operator.itemgetter(2), reverse=True)
-            
+
             if top_k_def is not None:
                 all_defs = all_defs[:top_k_def]
-            
+
             for ident, definition, score in all_defs:
                 if normalize_score:
                     score = np.tanh(score / 2.0)
@@ -336,7 +341,6 @@ class Evaluator:
                 print '    ', 
                 print self.print_fuzzy_merged_definition_list(ident, definit_list, scorer=scorer,
                                                               collection_weighting=collection_weighting)
-
 
     def cluster_details(self, cluster_assignment, cluster_id):
         indices, = np.where(cluster_assignment == cluster_id)
@@ -349,18 +353,18 @@ class Evaluator:
 
             document_titles.append(self.doc_titles[idx])
             document_categories.update(self.doc_categories[idx])
-      
+
         return document_titles, document_categories
 
     def describe(self, cluster_assignment, top_categories=4):
         k = cluster_assignment.max()
-        
+
         for k_i in xrange(k):
             indices, = np.where(cluster_assignment == k_i)
             N_i = len(indices) * 1.0
-            
+
             cluster_cats = Counter()
-            
+
             for doc_i in indices:
                 idx = int(doc_i)
                 cluster_cats.update(self.doc_categories[idx])
@@ -368,18 +372,18 @@ class Evaluator:
             relative = [(cat, freq / N_i) for cat, freq in cluster_cats.most_common(top_categories)]
             rel = ['%s (%0.4f)' % (c, f) for c, f in relative]
             print k_i, ','.join(rel)
-            
+
     def category_distribution(self, cluster_assignment, category, order=None, show_zero=0):
         k = cluster_assignment.max()
-            
+
         category_involvement = []
-        
+
         for k_i in xrange(k):
             indices, = np.where(cluster_assignment == k_i)
             N_i = len(indices)
 
             cluster_cats = Counter()
-            
+
             for doc_i in indices:
                 idx = int(doc_i)
                 cluster_cats.update(self.doc_categories[idx])
@@ -389,7 +393,6 @@ class Evaluator:
                 continue
 
             category_involvement.append((k_i, count, N_i))
-    
 
         total = sum(cnt for k_i, cnt, N_i in category_involvement)
         category_involvement = \
@@ -402,4 +405,4 @@ class Evaluator:
 
         for k_i, count, percentage, N_i, purity in category_involvement:
             print '%3d: percentage: %2.1f%%, coverage: %d/%d = %0.4f'  % (k_i, percentage, count, N_i, purity)
-            
+

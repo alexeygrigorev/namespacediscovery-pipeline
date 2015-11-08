@@ -17,7 +17,8 @@ from nltk.stem import SnowballStemmer
 snowball_stemmer = SnowballStemmer('english')
 
 import logging
-log = logging.getLogger('nd.etl.ivs')
+log = logging.getLogger('nd.algorithms')
+
 
 def process_nodef(inp):
     return inp
@@ -62,8 +63,6 @@ def process(type, inp):
 
 
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.decomposition import TruncatedSVD, randomized_svd
-
 
 class Vectorized():
     original_input = None
@@ -78,7 +77,7 @@ class Vectorized():
 def vectorize(inp, **kwargs):
     """ Vectorizes the input 
 
-    inp: input from nd.etl.read.InputData
+    inp: input from nd.read.mlp_read.InputData
     kwargs: other params passed to sklearn vectorizer 
             such as use_idf=True, sublinear_tf=True 
     """
