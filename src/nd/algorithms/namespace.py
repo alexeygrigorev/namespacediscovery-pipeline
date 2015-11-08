@@ -76,7 +76,7 @@ class Namespace():
 
         print 
         for child in self._children:
-            child.print_ns(indend+1, print_rels=print_rels)
+            child.print_ns(evaluator, indend+1, print_rels=print_rels)
             print
 
     def __repr__(self):
