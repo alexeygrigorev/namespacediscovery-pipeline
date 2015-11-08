@@ -11,6 +11,7 @@ output:
 
 - namespaces (like [here](http://0agr.ru/wiki/index.php/Discovered_namespaces))
 
+
 ## Running It
 
     git clone https://github.com/alexeygrigorev/namespacediscovery-pipeline.git
@@ -37,7 +38,7 @@ for PyData stack libraries such as numpy, scipy, scikit-learn and nltk
 it's best to use [anaconda](http://docs.continuum.io/anaconda/install) 
 installer 
 
-Not all dependencies are available on anaconda, use `pip` to install them:
+Not all dependencies come pre-installed with anaconda, use `pip` to install them:
 
     pip install python-Levenshtein
     pip install fuzzywuzzy
@@ -45,14 +46,24 @@ Not all dependencies are available on anaconda, use `pip` to install them:
     pip install rdflib
 
 
-see SETUP.md for an example how to set up the environment
+We also need to download some data for nltk: the list of stopwords and the model 
+for tokenization. Run it in the python console to install them:
+
+    import nltk
+    nltk.download('stopwords')
+    nltk.download('punkt')
+
+
+see [SETUP.md](SETUP.md) for an example how to set up the environment
 
 
 ## Datasets 
 
 We use the following datasets as input:
 
+
 - mlp ... 
+- dbpedia category information
 
 
 Classification schemes:
@@ -61,4 +72,5 @@ Classification schemes:
 - PACS (downloaded from https://github.com/teefax/pacsparser)
 - ACM (Can be downloaded from http://www.acm.org/about/class/class/2012 and has parsable skos format http://dl.acm.org/ft_gateway.cfm?id=2371137&ftid=1290922&dwn=1)
 
+The classification schemes dataset are already available in the `data` directory.
 

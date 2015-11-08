@@ -8,14 +8,11 @@ from collections import defaultdict
 
 import numpy as np
 
-import nltk
 from nltk.tokenize import word_tokenize
-nltk.download('punkt')
 
 from nltk.stem import SnowballStemmer
 snowball_stemmer = SnowballStemmer('english')
 
-nltk.download('stopwords')
 from nltk.corpus import stopwords
 ENGLISH_STOP_WORDS = set(stopwords.words('english') + 
                  ['etc', 'given', 'method', 'methods', 'theory', 'problem',
