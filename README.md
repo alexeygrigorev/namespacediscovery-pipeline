@@ -72,5 +72,5 @@ Classification schemes:
 - PACS (downloaded from https://github.com/teefax/pacsparser)
 - ACM (Can be downloaded from http://www.acm.org/about/class/class/2012 and has parsable skos format http://dl.acm.org/ft_gateway.cfm?id=2371137&ftid=1290922&dwn=1)
 
-The classification schemes dataset are already available in the `data` directory.
+The classification schemes datasets are already available in the `data` directory.
 
