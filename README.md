@@ -24,7 +24,7 @@ Modify `luigi.cfg` to set different configuration parameters
 You need to al least change the following parameters:
 
 - `[MlpResultsReadTask]/mlp_results` - path to the output of mlp
-- `[MlpResultsReadTask]/mlp_results` - path to the category information
+- `[MlpResultsReadTask]/categories_processed` - path to the category information
 - (optional) `[DEFAULT]/intermediate_result_dir` - path to directory where pre-calculated results will be stored 
 
 
