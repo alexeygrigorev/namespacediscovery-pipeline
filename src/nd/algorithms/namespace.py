@@ -11,7 +11,7 @@ import numpy as np
 from nltk.tokenize import word_tokenize
 
 from nltk.stem import SnowballStemmer
-from docutils.nodes import definition
+
 snowball_stemmer = SnowballStemmer('english')
 
 from nltk.corpus import stopwords
