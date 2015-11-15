@@ -36,7 +36,7 @@ def process_weak(inp):
             for definition, score in definitions:
                 unigrams = definition.lower().split()
                 id_list[id] = id_list[id] + 1
-                
+
                 for unigram in unigrams:
                     stem = snowball_stemmer.stem(unigram)
                     id_list[stem] = id_list[stem] + 1
@@ -74,6 +74,12 @@ class Vectorized():
         self.vectorizer = vectorizer
         self.X = X
 
+def unwrap_counter(cnt):
+    res = []
+    for id, c in cnt.items():
+        res.extend([id] * c)
+    return res
+
 def vectorize(inp, **kwargs):
     """ Vectorizes the input 
 
@@ -81,12 +87,6 @@ def vectorize(inp, **kwargs):
     kwargs: other params passed to sklearn vectorizer 
             such as use_idf=True, sublinear_tf=True 
     """
-
-    def unwrap_counter(cnt):
-        res = []
-        for id, c in cnt.items():
-            res.extend([id] * c)
-        return res
 
     log.debug('Vectorizing input using params %s' % str(kwargs))
 

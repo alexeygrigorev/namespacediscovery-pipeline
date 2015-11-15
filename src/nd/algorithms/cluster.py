@@ -13,6 +13,7 @@ log = logging.getLogger('nd.algorithms')
 
 
 def k_means(X, k):
+    k = int(k)
     log.debug('applying KMeans with k=%d...' % k)
     km = MiniBatchKMeans(n_clusters=k, init_size=k*3, n_init=10, init='random')
     km.fit(X)

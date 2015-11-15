@@ -40,7 +40,9 @@ def random(X, K):
 def dimred(vectorized, algo, N, **kwargs):
     X = vectorized.X
 
-    if algo == 'svd':
+    if algo == 'none':
+        X_red = X
+    elif algo == 'svd':
         X_red = svd(X, N)
     elif algo == 'nmf':
         X_red = nmf(X, N)
