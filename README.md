@@ -21,6 +21,20 @@ output:
 
 Modify `luigi.cfg` to set different configuration parameters 
 
+You need to al least change the following parameters:
+
+- `[MlpResultsReadTask]/mlp_results` - path to the output of mlp
+- `[MlpResultsReadTask]/mlp_results` - path to the category information
+- (optional) `[DEFAULT]/intermediate_result_dir` - path to directory where pre-calculated results will be stored 
+
+
+Other parameters (`[DEFAULT]` section): 
+
+- `isv_type` identifier vector space model, can be `nodef`, `weak` or `strong`
+- `vectorizer_dim_red` type of dimentionality reduction, can be `none`, `svd`, `nmf` or `random`
+- `clustering_algorithm`, now only `kmeans` is implemented 
+
+
 ## Dependencies 
 
 - python2
