@@ -11,6 +11,7 @@ import numpy as np
 from nltk.tokenize import word_tokenize
 
 from nltk.stem import SnowballStemmer
+from docutils.nodes import definition
 snowball_stemmer = SnowballStemmer('english')
 
 from nltk.corpus import stopwords
@@ -20,6 +21,7 @@ ENGLISH_STOP_WORDS = set(stopwords.words('english') +
                  ['section'] + ['must', 'also'])
 
 from sklearn.feature_extraction.text import TfidfVectorizer
+
 
 class Namespace():
 
@@ -57,6 +59,39 @@ class Namespace():
         self._purity = purity
         self._matching_score = matching_score
         self._matching_terms = matching_terms
+
+    def to_dict(self, evaluator):
+        res = {}
+        res['category_name'] = self._name
+
+        if self._wiki_cats:
+            res['wiki_categories'] = self._wiki_cats.most_common(3)
+
+        if self._cluster_id:
+            res['cluster_id'] = self._cluster_id
+            res['matching_score'] = self._matching_score
+            res['purity'] = self._purity
+            res['matching_keywords'] = list(self._matching_terms)
+
+        if self._relations:
+            relations = []
+            for identifier, def_list in self._relations:
+                definitions, score = def_list[0]
+                top_definition = definitions[0] 
+                relation = {'identifier': identifier, 
+                            'top_definition': top_definition, 
+                            'top_definition_score': score, 
+                            'all_definitions': definitions }
+                relations.append(relation)
+            res['relations'] = relations
+
+        children = []
+        for child in self._children:
+            child_dict = child.to_dict(evaluator)
+            children.append(child_dict)
+        res['children'] = children
+
+        return res
 
     def print_ns(self, evaluator, indend=0, print_rels=0):
         indend_str = ' ' * (4 * indend)

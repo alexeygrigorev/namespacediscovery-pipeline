@@ -76,4 +76,7 @@ from nd.algorithms.namespace import assign_clusters_to_scheme
 ROOT = assign_clusters_to_scheme(merged_scheme, labels, mlp_data, evaluator,
                                  pure_clusters)
 
-ROOT.print_ns(evaluator, print_rels=1)
+dto = ROOT.to_dict(evaluator)
+
+import json
+print json.dumps(dto, indent=2, sort_keys=True, ensure_ascii=False).encode('utf8')

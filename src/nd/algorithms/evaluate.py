@@ -252,7 +252,7 @@ class Evaluator:
             combined[id] = self.fuzzy_combine_def(pre_combined, scorer)
 
         return combined 
-    
+
     def __fuzzy_list_name(self, list_names):
         if len(list_names) == 1:
             return list_names[0]
