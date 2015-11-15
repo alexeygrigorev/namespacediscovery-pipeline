@@ -5,6 +5,8 @@ Created on Nov 8, 2015
 '''
 
 import pickle
+import json
+import codecs
 
 import luigi
 from luigi.file import LocalTarget
@@ -18,6 +20,8 @@ import nd.algorithms.ivs as ivs
 
 from nd.algorithms.cluster import cluster
 from nd.algorithms.dimred import dimred
+
+from nd.algorithms.namespace import assign_clusters_to_scheme
 from nd.algorithms.evaluate import create_evaluator
 
 
@@ -108,6 +112,63 @@ class ClusteringTask(luigi.Task):
     def output(self):
         return LocalTarget(self.cached_result)
 
+
+class LoadReferenceCategoriesTask(luigi.Task):
+    data_dir = luigi.Parameter()
+    cached_result = luigi.Parameter()
+
+    def run(self):
+        msc = scheme.read('msc', self.data_dir + '/msc.txt')
+        pacs = scheme.read('pacs', self.data_dir + '/pacs.txt')
+        acm = scheme.read('acm', self.data_dir + '/acm_skos_taxonomy.xml')
+
+        merged_scheme = scheme.merge([msc, pacs, acm])
+
+        with open(self.output().path, 'wb') as f:
+            pickle.dump(merged_scheme, f)
+
+    def output(self):
+        return LocalTarget(self.cached_result)
+
+
+
+class BuildNamespacesTask(luigi.Task):
+    cached_result = luigi.Parameter()
+
+    purity_threshold = luigi.FloatParameter(default=0.8)
+    min_size = luigi.IntParameter(default=3)
+
+    def run(self):
+        with open(self.input()['mlp'].path, 'rb') as f:
+            mlp_data = pickle.load(f)
+        with open(self.input()['cluster'].path, 'rb') as f:
+            labels = pickle.load(f)
+        with open(self.input()['ref'].path, 'rb') as f:
+            merged_scheme = pickle.load(f)
+
+        evaluator = create_evaluator(mlp_data)
+        pure_clusters = evaluator.high_purity_clusters(labels, 
+                threshold=self.purity_threshold, min_size=self.min_size, 
+                all_categories=1)
+
+        ROOT = assign_clusters_to_scheme(merged_scheme, labels, mlp_data, 
+                                         evaluator, pure_clusters)
+
+        dto = ROOT.to_dict(evaluator)
+
+        with codecs.open(self.output().path, 'w', 'utf-8') as f:
+            json.dump(dto, f, indent=2, sort_keys=True, ensure_ascii=False)
+
+
+    def requires(self):
+        return {'ref': LoadReferenceCategoriesTask(),
+                'mlp': IdentifierVsmRepresentationTask(),
+                'cluster': ClusteringTask()}
+
+    def output(self):
+        return LocalTarget(self.cached_result)
+
+
 if __name__ == "__main__":
     import logging
     logging.basicConfig()
@@ -115,4 +176,4 @@ if __name__ == "__main__":
     logging.getLogger('nd.algorithms').setLevel(logging.DEBUG)
     logging.getLogger('nd.utils').setLevel(logging.DEBUG)
 
-    luigi.run(main_task_cls=ClusteringTask, local_scheduler=True)
+    luigi.run(main_task_cls=BuildNamespacesTask, local_scheduler=True)
