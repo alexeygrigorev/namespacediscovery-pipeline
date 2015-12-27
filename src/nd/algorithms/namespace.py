@@ -9,9 +9,7 @@ from collections import defaultdict
 import numpy as np
 
 from nltk.tokenize import word_tokenize
-
 from nltk.stem import SnowballStemmer
-
 snowball_stemmer = SnowballStemmer('english')
 
 from nltk.corpus import stopwords
@@ -21,6 +19,7 @@ ENGLISH_STOP_WORDS = set(stopwords.words('english') +
                  ['section'] + ['must', 'also'])
 
 from sklearn.feature_extraction.text import TfidfVectorizer
+import operator 
 
 
 class Namespace():
@@ -93,6 +92,10 @@ class Namespace():
 
         return res
 
+    def to_wiki(self, evaluator, f):
+        dto = self.to_dict(evaluator)
+        _print_dict(dto, evaluator, f, 1)
+
     def print_ns(self, evaluator, indend=0, print_rels=0):
         indend_str = ' ' * (4 * indend)
         print indend_str, 'Category: %s' % self._name
@@ -116,6 +119,39 @@ class Namespace():
 
     def __repr__(self):
         return self._name
+
+def _print_dict(res, evaluator, f, indend=1):
+    capt = '=' * indend
+    print >>f, capt, res['category_name'], capt
+
+    if 'wiki_categories' in res:
+        print >>f, 'wiki categories:', res['wiki_categories']
+        print >>f
+
+    if 'cluster_id' in res:
+        print >>f, 'Cluster information:'
+        print >>f, '* cluster id:', res['cluster_id']
+        print >>f, '* matching score:', res['matching_score']
+        print >>f, '* purity:', res['purity']
+        print >>f, '* matching keywords:', res['matching_keywords']
+        print >>f
+
+    if 'relations' in res:
+        all_res = [(r['identifier'], r['top_definition'], r['top_definition_score']) 
+                    for r in res['relations']]
+        all_res = sorted(all_res, key=operator.itemgetter(2), reverse=True)
+
+        print >>f, "'''Definitions:'''"           
+        for id, definition, score in all_res:
+            print >>f, u'* <math>%s</math>: %s (%0.3f)' % (id, definition, score)
+
+    print >>f
+    print >>f
+    if 'children' in res:
+        new_indend = indend + 1
+        for child in res['children']:
+            _print_dict(child, evaluator, f, new_indend)
+
 
 def scheme_to_vsm(scheme):
     all_categories = []

@@ -21,7 +21,7 @@ output:
 
 Modify `luigi.cfg` to set different configuration parameters 
 
-You need to al least change the following parameters:
+You need to at least change the following parameters:
 
 - `[MlpResultsReadTask]/mlp_results` - path to the output of mlp
 - `[MlpResultsReadTask]/categories_processed` - path to the category information

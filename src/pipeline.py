@@ -138,6 +138,7 @@ class BuildNamespacesTask(luigi.Task):
 
     purity_threshold = luigi.FloatParameter(default=0.8)
     min_size = luigi.IntParameter(default=3)
+    format = luigi.Parameter('json')
 
     def run(self):
         with open(self.input()['mlp'].path, 'rb') as f:
@@ -158,7 +159,10 @@ class BuildNamespacesTask(luigi.Task):
         dto = ROOT.to_dict(evaluator)
 
         with codecs.open(self.output().path, 'w', 'utf-8') as f:
-            json.dump(dto, f, indent=2, sort_keys=True, ensure_ascii=False)
+            if self.format == 'json':
+                json.dump(dto, f, indent=2, sort_keys=True, ensure_ascii=False)
+            elif self.format == 'wiki':
+                ROOT.to_wiki(evaluator, f)
 
 
     def requires(self):
