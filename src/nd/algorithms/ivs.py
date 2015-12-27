@@ -116,7 +116,7 @@ def identity_stemmer(term):
     return term
 
 type_stemmer_dict = {
-    'snowball': snowball_stemmer,
+    'snowball': snowball_stemmer.stem,
     'none': identity_stemmer
 }
 
