@@ -7,11 +7,13 @@ Created on Oct 18, 2015
 '''
 
 # IDENTIFIER VECTOR SPACE
-# 3 ways: nodef, weak, strong
+# 5 ways: nodef, weak, strong, full, strong last
 
 IDV_NO_DEF = 'nodef'
 IDV_WEAK = 'weak'
 IDV_STRONG = 'strong'
+IDV_FULL = 'full'
+IDV_STRONG_LAST = 'strong_last'
 
 from nltk.stem import SnowballStemmer
 snowball_stemmer = SnowballStemmer('english')
@@ -44,13 +46,70 @@ def process_weak(inp):
     return inp
 
 def process_strong(inp):
+    rels = inp.document_relations
+    ids = inp.document_identifiers
+    N_doc = len(rels)
+
+    for idx in xrange(N_doc):
+        vals = rels[idx].items()
+        id_list = ids[idx]
+
+        for id, definitions in vals:
+            for definition, score in definitions:
+                for unigram in definition.lower().split():
+                    stem = snowball_stemmer.stem(unigram)
+                    key = u'%s_%s' % (id, stem)
+                    id_list[key] = id_list[key] + 1
+    return inp
+
+
+def process_full(inp):
+    rels = inp.document_relations
+    ids = inp.document_identifiers
+    N_doc = len(rels)
+
+    for idx in xrange(N_doc):
+        vals = rels[idx].items()
+        id_list = ids[idx]
+
+        for id, definitions in vals:
+            for definition, score in definitions:
+                normalized_def = []
+
+                for unigram in definition.lower().split():
+                    stem = snowball_stemmer.stem(unigram)
+                    normalized_def.append(stem)
+
+                normalized_def = ' '.join(normalized_def)
+                key = u'%s_%s' % (id, normalized_def)
+                id_list[key] = id_list[key] + 1
+    return inp
+
+
+def process_strong_last(inp):
+    rels = inp.document_relations
+    ids = inp.document_identifiers
+    N_doc = len(rels)
+
+    for idx in xrange(N_doc):
+        vals = rels[idx].items()
+        id_list = ids[idx]
+
+        for id, definitions in vals:
+            for definition, score in definitions:
+                def_tokens = definition.lower().split()
+                last = snowball_stemmer.stem(def_tokens[-1])
+                key = u'%s_%s' % (id, last)
+                id_list[key] = id_list[key] + 1
     return inp
 
 
 type_function_dict = {
     IDV_NO_DEF: process_nodef,
     IDV_WEAK: process_weak,
-    IDV_STRONG: process_strong 
+    IDV_STRONG: process_strong,
+    IDV_FULL: process_full,
+    IDV_STRONG_LAST: process_strong_last
 }
 
 def process(type, inp):
@@ -60,7 +119,6 @@ def process(type, inp):
     else:
         raise Exception('unknown type "%s"' % type)
     
-
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 
