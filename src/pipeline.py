@@ -45,12 +45,13 @@ class MlpResultsReadTask(luigi.Task):
 class IdentifierVsmRepresentationTask(luigi.Task):
     cached_result = luigi.Parameter()
     type = luigi.Parameter()
+    stemmer = luigi.Parameter()
 
     def run(self):
         with open(self.input().path, 'rb') as f:
             mlp_data = pickle.load(f)
 
-        mlp_isv = ivs.process(self.type, mlp_data)
+        mlp_isv = ivs.process(self.type, self.stemmer, mlp_data)
 
         with open(self.output().path, 'wb') as f:
             pickle.dump(mlp_isv, f)

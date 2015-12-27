@@ -22,10 +22,10 @@ import logging
 log = logging.getLogger('nd.algorithms')
 
 
-def process_nodef(inp):
+def process_nodef(inp, stemmer):
     return inp
 
-def process_weak(inp):
+def process_weak(inp, stemmer):
     rels = inp.document_relations
     ids = inp.document_identifiers
     N_doc = len(rels)
@@ -40,12 +40,12 @@ def process_weak(inp):
                 id_list[id] = id_list[id] + 1
 
                 for unigram in unigrams:
-                    stem = snowball_stemmer.stem(unigram)
+                    stem = stemmer(unigram)
                     id_list[stem] = id_list[stem] + 1
 
     return inp
 
-def process_strong(inp):
+def process_strong(inp, stemmer):
     rels = inp.document_relations
     ids = inp.document_identifiers
     N_doc = len(rels)
@@ -57,13 +57,13 @@ def process_strong(inp):
         for id, definitions in vals:
             for definition, score in definitions:
                 for unigram in definition.lower().split():
-                    stem = snowball_stemmer.stem(unigram)
+                    stem = stemmer(unigram)
                     key = u'%s_%s' % (id, stem)
                     id_list[key] = id_list[key] + 1
     return inp
 
 
-def process_full(inp):
+def process_full(inp, stemmer):
     rels = inp.document_relations
     ids = inp.document_identifiers
     N_doc = len(rels)
@@ -77,7 +77,7 @@ def process_full(inp):
                 normalized_def = []
 
                 for unigram in definition.lower().split():
-                    stem = snowball_stemmer.stem(unigram)
+                    stem = stemmer(unigram)
                     normalized_def.append(stem)
 
                 normalized_def = ' '.join(normalized_def)
@@ -86,7 +86,7 @@ def process_full(inp):
     return inp
 
 
-def process_strong_last(inp):
+def process_strong_last(inp, stemmer):
     rels = inp.document_relations
     ids = inp.document_identifiers
     N_doc = len(rels)
@@ -98,7 +98,7 @@ def process_strong_last(inp):
         for id, definitions in vals:
             for definition, score in definitions:
                 def_tokens = definition.lower().split()
-                last = snowball_stemmer.stem(def_tokens[-1])
+                last = stemmer(def_tokens[-1])
                 key = u'%s_%s' % (id, last)
                 id_list[key] = id_list[key] + 1
     return inp
@@ -112,10 +112,25 @@ type_function_dict = {
     IDV_STRONG_LAST: process_strong_last
 }
 
-def process(type, inp):
+def identity_stemmer(term):
+    return term
+
+type_stemmer_dict = {
+    'snowball': snowball_stemmer,
+    'none': identity_stemmer
+}
+
+def process(type, stemmer, inp):
     if type in type_function_dict:
         log.debug('using %s type of IVS' % type)
-        return type_function_dict[type](inp)
+
+        if stemmer in type_stemmer_dict:
+            stemmer_func = type_stemmer_dict[stemmer]
+        else: 
+            log.info('unknown stemmer type %s, using identity stemmer' % stemmer)
+            stemmer_func = type_stemmer_dict['none']
+
+        return type_function_dict[type](inp, stemmer_func)
     else:
         raise Exception('unknown type "%s"' % type)
     
