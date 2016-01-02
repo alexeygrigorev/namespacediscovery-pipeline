@@ -9,6 +9,45 @@ import logging
 log = logging.getLogger('nd.read')
 
 
+class ClassificationCategory():
+    full_name = None
+    code = None
+    source = None
+
+    def to_dict(self):
+        return {'full_name': self.full_name, 'code': self.code, 'source': self.source}
+
+    def __hash__(self):
+        return hash((self.full_name, self.source))
+
+    def __eq__(self, o):
+        return (self.full_name, self.source) == (o.full_name, o.source)
+
+    def __repr__(self):
+        return '%s (%s/%s)' % (self.full_name, self.code, self.source)
+
+def new_Category(full_name, code, source):
+    cat = ClassificationCategory()
+    cat.full_name = full_name
+    cat.code = code
+    cat.source = source
+    return cat
+
+# because now keys are the category objects, we need helper methods to retrieve/delete
+# the items from the dictionaries by name
+
+def del_item_with_names(d, names):
+    for k in d.keys():
+        if k.full_name in names:
+            del d[k]
+
+def get(d, name):
+    for k, v in d.items():
+        if k.full_name == name:
+            return v
+    raise KeyError(name)
+
+
 def read_msc(path):
     tree = {}
 
@@ -29,34 +68,37 @@ def read_msc(path):
             continue
 
         if tabs == 0:
-            top_parent = name
+            top_parent = new_Category(name, code, 'MSC')
             tree[top_parent] = {}
         elif tabs == 1:
-            parent = name
+            parent = new_Category(name, code, 'MSC')
             tree[top_parent][parent] = []
         else:
-            tree[top_parent][parent].append(name)
+            category = new_Category(name, code, 'MSC')
+            tree[top_parent][parent].append(category)
 
-    del tree['General']
-    del tree['History and biography']
-    del tree['Mathematics education']
+    del_item_with_names(tree, ['General', 'History and biography', 'Mathematics education'])
+    del_item_with_names(get(tree, 'Quantum theory'), ['Axiomatics, foundations, philosophy', 
+        'Applications to specific physical systems', 'Groups and algebras in quantum theory'])
 
-    del tree['Quantum theory']['Axiomatics, foundations, philosophy']
-    del tree['Quantum theory']['Applications to specific physical systems']
-    del tree['Quantum theory']['Groups and algebras in quantum theory']
-
-    del tree['Partial differential equations']['Equations of mathematical physics and other areas of application']
-    del tree['Statistics']['Sufficiency and information']
-    del tree['Functional analysis']['Other (nonclassical) types of functional analysis']
-    del tree['Functional analysis']['Miscellaneous applications of functional analysis']
+    del_item_with_names(get(tree, 'Partial differential equations'), 
+        ['Equations of mathematical physics and other areas of application'])
+    del_item_with_names(get(tree, 'Statistics'), 
+        ['Sufficiency and information'])
+    del_item_with_names(get(tree, 'Functional analysis'), 
+        ['Other (nonclassical) types of functional analysis', 
+         'Miscellaneous applications of functional analysis'])
 
     for k_top, top in tree.items():
-        for k_2, v in top.items():
-            if not v:
+        for k_2, list_subcats in top.items():
+            if not list_subcats:
                 del top[k_2]
-            elif k_2 == u'Applications':
+                continue
+
+            k_2_name = k_2.full_name.lower()
+            if k_2_name == u'Applications':
                 del top[k_2]
-            elif 'proceedings' in k_2.lower() or 'conferences' in k_2.lower() or 'collections' in k_2.lower():
+            elif 'proceedings' in k_2_name or 'conferences' in k_2_name or 'collections' in k_2_name:
                 del top[k_2]
 
     return tree
@@ -107,27 +149,24 @@ def read_pacs(path):
             is_top_level = (top_code % 10 == 0) & (codes[1] == '00') & (codes[2] == '00')
 
         if is_top_level:
-            top_top_parent = name
+            top_top_parent = new_Category(name, code, 'PACS')
             tree_pacs[top_top_parent] = {}
         elif (codes[1] == '00') & (codes[2] == '00'):
-            top_parent = name
+            top_parent = new_Category(name, code, 'PACS')
             tree_pacs[top_top_parent][top_parent] = {}
         elif codes[2][0] in ['+', '-']:
-            parent = name
+            parent = new_Category(name, code, 'PACS')
             tree_pacs[top_top_parent][top_parent][parent] = []
         else: # tabs == 0
-            tree_pacs[top_top_parent][top_parent][parent].append(name)
+            category = new_Category(name, code, 'PACS')
+            tree_pacs[top_top_parent][top_parent][parent].append(category)
 
-    del tree_pacs['GENERAL']
+    del_item_with_names(tree_pacs, 'GENERAL')
 
-    pacs = {}
+    # let's combine 3rd and 4th levels 
+    result = {}
     for k_0, cat_top in tree_pacs.items():
-        for k_1, cat in cat_top.items():
-            pacs[k_0 + ' ' + k_1] = cat
-
-    general_pacs = {}
-    for k_0, cat_top in tree_pacs.items():
-        general_pacs[k_0] = {}
+        result[k_0] = {}
 
         for k_1, cat in cat_top.items():
             desc = []
@@ -135,9 +174,9 @@ def read_pacs(path):
                 desc.append(k_2)
                 desc.extend(low_cat)
 
-            general_pacs[k_0][k_1] = desc
+            result[k_0][k_1] = desc
 
-    return general_pacs
+    return result
 
 def read_acm(path):
     import rdflib
@@ -171,8 +210,6 @@ def read_acm(path):
                  'Information systems', 'Security and privacy', 
                  'Human-centered computing', 'Computing methodologies']
 
-    acm_tree = {}
-
     def dfs(result, cat):
         result.append(cat)
         if cat in narrower:
@@ -180,13 +217,19 @@ def read_acm(path):
                 dfs(result, n_cat)
         return result
 
+    def acm_cat(name):
+        return new_Category(name, 'NO_CODE', 'ACM')
+
+    acm_tree = {}
+
     for most_top in top_level:
-        acm_tree[most_top] = {}
+        mt_cat = acm_cat(most_top)
+        acm_tree[mt_cat] = {}
         for cat in narrower[most_top]:
-            acm_tree[most_top][cat] = dfs([], cat)
+            sub_cats = dfs([], cat)
+            acm_tree[mt_cat][acm_cat(cat)] = [acm_cat(c) for c in sub_cats]
 
     return acm_tree
-
 
 
 def read(scheme, path):

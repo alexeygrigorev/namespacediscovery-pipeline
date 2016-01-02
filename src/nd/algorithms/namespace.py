@@ -21,6 +21,7 @@ ENGLISH_STOP_WORDS = set(stopwords.words('english') +
 from sklearn.feature_extraction.text import TfidfVectorizer
 import operator 
 
+from nd.read.scheme import new_Category
 
 class Namespace():
 
@@ -32,6 +33,8 @@ class Namespace():
     _wiki_cats = None
 
     _cluster_id = None
+
+    _cat_reference = None
 
     def __init__(self, name, parent=None):
         self._name = name
@@ -65,6 +68,9 @@ class Namespace():
 
         if self._wiki_cats:
             res['wiki_categories'] = self._wiki_cats.most_common(3)
+
+        if self._cat_reference:
+            res['reference_category'] = self._cat_reference.to_dict()
 
         if self._cluster_id:
             res['cluster_id'] = self._cluster_id
@@ -124,9 +130,20 @@ def _print_dict(res, evaluator, f, indend=1):
     capt = '=' * indend
     print >>f, capt, res['category_name'], capt
 
-    if 'wiki_categories' in res:
-        print >>f, 'wiki categories:', res['wiki_categories']
-        print >>f
+    if 'reference_category' in res:
+        print >>f, 'Category information'
+        category_info = res['reference_category']
+        print >>f, '* reference category: ', category_info['full_name']
+        print >>f, '* code: %s (%s)' % (category_info['code'], category_info['source'])
+
+        if 'wiki_categories' in res:
+            print >>f, '* wiki categories:', res['wiki_categories']
+            print >>f
+    else:
+        if 'wiki_categories' in res:
+            print >>f, 'Category information'
+            print >>f, '* wiki categories:', res['wiki_categories']
+            print >>f
 
     if 'cluster_id' in res:
         print >>f, 'Cluster information:'
@@ -153,29 +170,49 @@ def _print_dict(res, evaluator, f, indend=1):
             _print_dict(child, evaluator, f, new_indend)
 
 
+class SchemeVSM():
+    cat_index = None
+    category_vectorizer = None
+    all_categories = None
+    all_categories_idx = None
+    all_categories_meta = None
+
 def scheme_to_vsm(scheme):
     all_categories = []
     all_categories_idx = {}
-
+    all_categories_meta = {}
     cnt = 0
 
     for k_top, top in scheme.items():
-        for k_2, v in top.items():
-            top = ' '.join([k_top] * 3)
-            document = top + ' ' + k_2 + ' ' + ' '.join(v)
+        for k_2, values in top.items():
+            top = ' '.join([k_top.full_name] * 3)
+            cat_names = [c.full_name for c in values]
+            document = top + ' ' + k_2.full_name + ' ' + ' '.join(cat_names)
             tokens = word_tokenize(document)
             tokens = [t.lower() for t in tokens if t.isalpha()]
             tokens = [t for t in tokens if t not in ENGLISH_STOP_WORDS]
             all_categories.append(tokens)
-            all_categories_idx[cnt] = (k_top, k_2)
+            all_categories_idx[cnt] = (k_top.full_name, k_2.full_name)
+            all_categories_meta[cnt] = k_2
             cnt = cnt + 1
 
     def identity(lst): return lst
     category_vectorizer = TfidfVectorizer(analyzer=identity).fit(all_categories)
 
     cat_index = category_vectorizer.transform(all_categories)
-    return cat_index, category_vectorizer, all_categories, all_categories_idx
 
+    result = SchemeVSM()
+    result.scheme_vec = cat_index
+    result.category_vectorizer = category_vectorizer
+    result.all_categories = all_categories
+    result.all_categories_idx = all_categories_idx
+    result.all_categories_meta = all_categories_meta
+
+    return result
+
+class ClusterVSM():
+    clus_index = None
+    clusters_representation = None
 
 def clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator, 
                     category_vectorizer):
@@ -213,16 +250,19 @@ def clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator,
         clusters_representation.append(tokens)
 
     clus_index = category_vectorizer.transform(clusters_representation)
-    return clus_index, clusters_representation
 
+    result = ClusterVSM()
+    result.clusters_vec = clus_index
+    result.clusters_representation = clusters_representation
+    return result
 
 def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clusters):
-    scheme_vec, category_vectorizer, all_categories, all_categories_idx = scheme_to_vsm(scheme)
-    clusters_vec, clusters_representation = clusters_to_vsm(labels, selected_clusters, 
-                                                            mlp_data, evaluator, category_vectorizer)
+    scheme_vsm = scheme_to_vsm(scheme)
+    cluster_vsm = clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator,
+                        scheme_vsm.category_vectorizer)
 
     # cosine between scheme and clusters
-    clus_cat_sim = (clusters_vec * scheme_vec.T).toarray()
+    clus_cat_sim = (cluster_vsm.clusters_vec * scheme_vsm.scheme_vec.T).toarray()
 
     best_similarity = clus_cat_sim.max(axis=1)
     clus_cat_assignment = clus_cat_sim.argmax(axis=1)
@@ -236,13 +276,14 @@ def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clus
         desc = selected_clusters[idx]
 
         score = best_similarity[idx]
-        common_keywords = set(clusters_representation[idx]) & set(all_categories[cat_id])
+        common_keywords = set(cluster_vsm.clusters_representation[idx]) & \
+            set(scheme_vsm.all_categories[cat_id])
     
-        parent_cat, namespace_cat = all_categories_idx[cat_id]
+        parent_cat, namespace_cat = scheme_vsm.all_categories_idx[cat_id]
         if score <= 0.2 or len(common_keywords) == 1:
             parent_cat = 'OTHER'
     
-        namespaces[parent_cat].append((namespace_cat, score, desc, common_keywords))
+        namespaces[parent_cat].append((namespace_cat, score, desc, common_keywords, cat_id))
         namespace_name.append((desc['cluster'], (parent_cat, namespace_cat)))
 
     namespaces = sorted(namespaces.items())
@@ -252,9 +293,16 @@ def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clus
     for parent_cat, groups in namespaces:
         parent_namespace = Namespace(parent_cat, ROOT)
     
-        for cat, score, desc, common in groups:
+        for cat, score, desc, common, cat_id in groups:
             ns = Namespace(cat, parent_namespace)
             ns.set_wiki_categories(desc['all_categories'])
+            
+            if parent_cat != 'OTHER':
+                shema_meta = scheme_vsm.all_categories_meta[cat_id]
+                ns._cat_reference = shema_meta
+            else:
+                no_ref = new_Category('NO_REFERENCE_CATEGORY', 'NO_CODE', 'NO_SCHEMA')
+                ns._cat_reference = no_ref
 
             # wiki_category = ns.most_common_wiki_cat()
             cluster_id = desc['cluster']
