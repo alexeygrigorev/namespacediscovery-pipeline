@@ -9,11 +9,11 @@ Created on Oct 18, 2015
 import json
 import os
 
-
 from collections import Counter
 from collections import defaultdict
 
 import logging
+
 log = logging.getLogger('nd.read')
 
 
@@ -28,17 +28,17 @@ def id_counter(id_list):
     return cnt
 
 
-def_black_list = { 
-        'unit', 'units', 'value', 'values', 'axis', 'axes', 'factor', 'factors', 'line', 'lines',
-        'point', 'points', 'number', 'numbers', 'variable', 'variables', 'respect', 'case', 'cases',
-        'vector', 'vectors', 'element', 'elements', 'example',
-        'integer', 'integers', 'term', 'terms', 'parameter', 'parameters', 'coefficient', 'coefficients',
-        'formula', 'times', 'product', 'matrices', 'expression', 'complex', 'real', 'zeros', 'bits',
-        'sign',
-        'if and only if',
-        'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa', 'lambda',
-        'mu', 'nu', 'xi', 'omicron', 'pi', 'rho', 'sigma', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega'
-    }
+def_black_list = {
+    'unit', 'units', 'value', 'values', 'axis', 'axes', 'factor', 'factors', 'line', 'lines',
+    'point', 'points', 'number', 'numbers', 'variable', 'variables', 'respect', 'case', 'cases',
+    'vector', 'vectors', 'element', 'elements', 'example',
+    'integer', 'integers', 'term', 'terms', 'parameter', 'parameters', 'coefficient', 'coefficients',
+    'formula', 'times', 'product', 'matrices', 'expression', 'complex', 'real', 'zeros', 'bits',
+    'sign',
+    'if and only if',
+    'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa', 'lambda',
+    'mu', 'nu', 'xi', 'omicron', 'pi', 'rho', 'sigma', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega'
+}
 
 
 def valid_def(definition):
@@ -89,7 +89,7 @@ def read_categories(path):
         if cat == u'OTHER':
             continue
 
-        doc_categories[title].add(cat) 
+        doc_categories[title].add(cat)
         category_docs[cat].add(title)
 
     return doc_categories, category_docs
@@ -106,7 +106,7 @@ def read_mlp_output(mlp_output_dir, doc_categories):
     small = 0
     uncategorized = 0
 
-    for f in os.listdir(mlp_output_dir): 
+    for f in os.listdir(mlp_output_dir):
         for line in file(mlp_output_dir + f):
             doc = json.loads(line)
 
@@ -129,7 +129,7 @@ def read_mlp_output(mlp_output_dir, doc_categories):
             docs.append(doc)
             titles.append(title)
             ids.append(id_bag)
-    
+
             id_rels = rel_to_dict(doc['relations'])
             rels.append(id_rels)
 
@@ -148,7 +148,7 @@ def build_doc_category_list(doc_categories, category_docs, titles, title_idx):
         if doc in title_idx:
             continue
 
-        for cat in cats: 
+        for cat in cats:
             category_docs[cat].remove(doc)
 
         del doc_categories[doc]
@@ -173,14 +173,11 @@ def main_read(props):
 
     doc_categories_list = build_doc_category_list(doc_categories, category_docs, titles, title_idx)
 
-    # ids, rels = remove_infrequent(ids, rels)
-
-    result = InputData()
-    result.document_titles = titles
-    result.document_categories = doc_categories_list
-    result.document_identifiers = ids
-    result.document_relations = rels
-    result.document_to_index = title_idx
+    result = InputData(document_titles=titles,
+                       document_categories=doc_categories_list,
+                       document_identifiers=ids,
+                       document_relations=rels,
+                       document_to_index=title_idx)
 
     result.remove_infrequent_definitions(threshold=1)
     result.remove_infrequent_identifiers(threshold=2)
@@ -189,37 +186,41 @@ def main_read(props):
 
 
 class InputData():
-    document_titles = None
-    document_categories = None
-    document_identifiers = None
-    document_relations = None
-
-    document_to_index = None
+    def __init__(self, document_titles, document_categories,
+                 document_identifiers, document_relations, document_to_index):
+        """
+        :rtype: InputData
+        """
+        self.document_titles = document_titles
+        self.document_categories = document_categories
+        self.document_identifiers = document_identifiers
+        self.document_relations = document_relations
+        self.document_to_index = document_to_index
 
     def remove_infrequent_definitions(self, threshold=1):
         log.debug('removing infrequent definitions with frequency <= %d...' % threshold)
         def_freq = Counter()
 
-        for def_dict in self.document_relations: 
+        for def_dict in self.document_relations:
             for _, def_list in def_dict.items():
                 def_freq.update([d for d, _ in def_list])
-    
+
         low_freq_def = {id for id, cnt in def_freq.items() if cnt <= threshold}
         log.debug('there are %d definitions with frequency <= %d, removing them...' %
                   (len(low_freq_def), threshold))
-    
-        for def_dict in self.document_relations: 
+
+        for def_dict in self.document_relations:
             for id, def_list in def_dict.items():
                 clean_def_list = []
                 for definition, score in def_list:
                     if definition not in low_freq_def:
                         clean_def_list.append((definition, score))
-    
+
                 if not clean_def_list:
                     del def_dict[id]
                 else:
                     def_dict[id] = clean_def_list
-    
+
         log.debug('removed')
 
     def remove_infrequent_identifiers(self, threshold=2):
@@ -233,13 +234,12 @@ class InputData():
         for (el, cnt) in all_ids.items():
             if cnt <= threshold:
                 infrequent.add(el)
-    
+
         for id_cnt in self.document_identifiers:
             for id in (set(id_cnt) & infrequent):
                 del id_cnt[id]
 
         log.debug('removed')
-
 
 
 if __name__ == '__main__':
