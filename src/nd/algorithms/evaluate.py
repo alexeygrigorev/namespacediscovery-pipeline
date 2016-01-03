@@ -6,10 +6,8 @@ Created on Oct 18, 2015
 @author: alexey
 '''
 
-
-
 import numpy as np
-import operator 
+import operator
 from collections import Counter, defaultdict
 from itertools import groupby
 
@@ -17,22 +15,33 @@ from fuzzywuzzy import fuzz, process
 
 
 def create_evaluator(data):
-    return Evaluator(data.document_titles, data.document_identifiers, 
-        data.document_relations, data.document_categories)
+    return Evaluator(data.document_titles, data.document_identifiers,
+                     data.document_relations, data.document_categories)
+
+
+class ClusterDescription():
+    def __init__(self, cluster, purity, category, size, all_categories):
+        self.cluster = cluster
+        self.purity = purity
+        self.category = category
+        self.size = size
+        self.all_categories = all_categories
+
 
 class Evaluator():
-    doc_titles = None
-    doc_ids = None
-    doc_ids_definitions = None
-    doc_categories = None
-
-    def __init__(self, doc_titles, doc_ids, doc_ids_definitions, doc_categories):
-        self.doc_titles = doc_titles
-        self.doc_ids = doc_ids
-        self.doc_ids_definitions = doc_ids_definitions
-        self.doc_categories = doc_categories
+    def __init__(self, document_titles, document_identifiers, document_relations, document_categories):
+        self.document_titles = document_titles
+        self.document_identifiers = document_identifiers
+        self.document_relations = document_relations
+        self.document_categories = document_categories
 
     def cluster_purity(self, indices):
+        """
+        Calculates purity of a cluster
+        :param indices: indexes of documents for which we want to calculate purity
+        :return: purity and most frequent category
+        :rtype: tuple(float, str)
+        """
         if indices.dtype == 'bool':
             indices, = np.where(indices)
 
@@ -43,7 +52,7 @@ class Evaluator():
         cluster_cats = Counter()
 
         for idx in indices:
-            cluster_cats.update(self.doc_categories[idx])
+            cluster_cats.update(self.document_categories[idx])
 
         if len(cluster_cats) == 0:
             return 0.0, ''
@@ -52,19 +61,23 @@ class Evaluator():
         return 1.0 * cat_cnt / size, category
 
     def cluster_categories(self, indices):
+        """
+
+        :param indices: indexes of documents for which we want to calculate purity
+        :return: categories for the cluster
+        :rtype: Counter
+        """
         if indices.dtype == 'bool':
             indices, = np.where(indices)
 
         cluster_cats = Counter()
         for idx in indices:
-            cluster_cats.update(self.doc_categories[idx])
+            cluster_cats.update(self.document_categories[idx])
 
         return cluster_cats
 
-    def high_purity_clusters(self, cluster_assignment, threshold, min_size=5, 
-                             k=None, all_categories=0):
-        if not k:
-            k = cluster_assignment.max()
+    def high_purity_clusters(self, cluster_assignment, threshold, min_size=5):
+        k = cluster_assignment.max()
 
         cluster_ids = []
 
@@ -74,11 +87,11 @@ class Evaluator():
             if size < min_size:
                 continue
 
-            pur, cat = self.cluster_purity(indices)
-            if pur >= threshold:
-                desc = { 'cluster': cluster_no, 'purity': pur, 'category': cat, 'size': size }
-                if all_categories: 
-                    desc['all_categories'] = self.cluster_categories(indices)
+            purity, category = self.cluster_purity(indices)
+            if purity >= threshold:
+                desc = ClusterDescription(cluster=cluster_no, purity=purity,
+                                          category=category, size=size,
+                                          all_categories=self.cluster_categories(indices))
                 cluster_ids.append(desc)
 
         return cluster_ids
@@ -100,10 +113,10 @@ class Evaluator():
         return sorted(combined, key=operator.itemgetter(1), reverse=True)
 
     def fuzzy_combine_def(self, definitions, scorer=None):
-        d = dict(definitions) 
+        d = dict(definitions)
         order_key = lambda name: d[name]
 
-        result = []        
+        result = []
         names = set(d.keys())
 
         if scorer is None:
@@ -130,7 +143,7 @@ class Evaluator():
     def find_all_def(self, cluster_assignment, cluster_ids, scorer=None):
         if isinstance(cluster_ids, int):
             cluster_ids = [cluster_ids]
-   
+
         all_relations = defaultdict(list)
 
         for cluster_id in cluster_ids:
@@ -138,15 +151,15 @@ class Evaluator():
 
             for np_idx in indices:
                 idx = int(np_idx)
-                for ident, definit in self.doc_ids_definitions[idx].items():
-                    all_relations[ident].extend(definit)
+                for indent, definition in self.document_relations[idx].items():
+                    all_relations[indent].extend(definition)
 
         combined = {}
         for id, definitions in all_relations.items():
             pre_combined = self.combine_def(definitions)
             combined[id] = self.fuzzy_combine_def(pre_combined, scorer)
 
-        return combined 
+        return combined
 
     def __fuzzy_list_name(self, list_names):
         if len(list_names) == 1:
@@ -154,9 +167,9 @@ class Evaluator():
         else:
             return list_names[0] + '*'
 
-    def _string_def_list(self, ident, def_list_fuzzy_combined):
+    def _string_def_list(self, indent, def_list_fuzzy_combined):
         def_str = ['(%s: %0.2f)' % (self.__fuzzy_list_name(d), s) for (d, s) in def_list_fuzzy_combined]
-        return '%s: %s' % (ident, ', '.join(def_str))
+        return '%s: %s' % (indent, ', '.join(def_str))
 
     def cluster_details(self, cluster_assignment, cluster_id):
         indices, = np.where(cluster_assignment == cluster_id)
@@ -167,7 +180,7 @@ class Evaluator():
         for np_idx in indices:
             idx = int(np_idx)
 
-            document_titles.append(self.doc_titles[idx])
-            document_categories.update(self.doc_categories[idx])
+            document_titles.append(self.document_titles[idx])
+            document_categories.update(self.document_categories[idx])
 
         return document_titles, document_categories

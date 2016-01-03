@@ -150,8 +150,7 @@ class BuildNamespacesTask(luigi.Task):
 
         evaluator = create_evaluator(mlp_data)
         pure_clusters = evaluator.high_purity_clusters(labels, 
-                threshold=self.purity_threshold, min_size=self.min_size, 
-                all_categories=1)
+                threshold=self.purity_threshold, min_size=self.min_size)
 
         ROOT = assign_clusters_to_scheme(merged_scheme, labels, mlp_data, 
                                          evaluator, pure_clusters)

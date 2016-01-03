@@ -15,15 +15,19 @@ import operator
 from nd.read.scheme import ClassificationCategory
 from nltk.corpus import stopwords
 
-ENGLISH_STOP_WORDS = set(stopwords.words('english') + 
-                 ['etc', 'given', 'method', 'methods', 'theory', 'problem',
-                  'problems', 'model', 'models'] + 
-                 ['section'] + ['must', 'also'])
+ENGLISH_STOP_WORDS = set(stopwords.words('english') +
+                         ['etc', 'given', 'method', 'methods', 'theory', 'problem',
+                          'problems', 'model', 'models'] +
+                         ['section'] + ['must', 'also'])
 snowball_stemmer = SnowballStemmer('english')
 
 
 class Namespace():
     def __init__(self, name, parent=None):
+        """
+
+        :rtype: Namespace
+        """
         self._name = name
         self._children = []
 
@@ -76,11 +80,11 @@ class Namespace():
             relations = []
             for identifier, def_list in self._relations:
                 definitions, score = def_list[0]
-                top_definition = definitions[0] 
-                relation = {'identifier': identifier, 
-                            'top_definition': top_definition, 
-                            'top_definition_score': score, 
-                            'all_definitions': definitions }
+                top_definition = definitions[0]
+                relation = {'identifier': identifier,
+                            'top_definition': top_definition,
+                            'top_definition_score': score,
+                            'all_definitions': definitions}
                 relations.append(relation)
             res['relations'] = relations
 
@@ -99,44 +103,45 @@ class Namespace():
     def __repr__(self):
         return self._name
 
+
 def _print_dict(res, evaluator, f, indent=1):
     capt = '=' * indent
-    print >>f, capt, res['category_name'], capt
+    print >> f, capt, res['category_name'], capt
 
     if 'reference_category' in res:
-        print >>f, 'Category information'
+        print >> f, 'Category information'
         category_info = res['reference_category']
-        print >>f, '* reference category: ', category_info['full_name']
-        print >>f, '* code: %s (%s)' % (category_info['code'], category_info['source'])
+        print >> f, '* reference category: ', category_info['full_name']
+        print >> f, '* code: %s (%s)' % (category_info['code'], category_info['source'])
 
         if 'wiki_categories' in res:
-            print >>f, '* wiki categories:', res['wiki_categories']
-            print >>f
+            print >> f, '* wiki categories:', res['wiki_categories']
+            print >> f
     else:
         if 'wiki_categories' in res:
-            print >>f, 'Category information'
-            print >>f, '* wiki categories:', res['wiki_categories']
-            print >>f
+            print >> f, 'Category information'
+            print >> f, '* wiki categories:', res['wiki_categories']
+            print >> f
 
     if 'cluster_id' in res:
-        print >>f, 'Cluster information:'
-        print >>f, '* cluster id:', res['cluster_id']
-        print >>f, '* matching score:', res['matching_score']
-        print >>f, '* purity:', res['purity']
-        print >>f, '* matching keywords:', res['matching_keywords']
-        print >>f
+        print >> f, 'Cluster information:'
+        print >> f, '* cluster id:', res['cluster_id']
+        print >> f, '* matching score:', res['matching_score']
+        print >> f, '* purity:', res['purity']
+        print >> f, '* matching keywords:', res['matching_keywords']
+        print >> f
 
     if 'relations' in res:
-        all_res = [(r['identifier'], r['top_definition'], r['top_definition_score']) 
-                    for r in res['relations']]
+        all_res = [(r['identifier'], r['top_definition'], r['top_definition_score'])
+                   for r in res['relations']]
         all_res = sorted(all_res, key=operator.itemgetter(2), reverse=True)
 
-        print >>f, "'''Definitions:'''"           
+        print >> f, "'''Definitions:'''"
         for id, definition, score in all_res:
-            print >>f, u'* <math>%s</math>: %s (%0.3f)' % (id, definition, score)
+            print >> f, u'* <math>%s</math>: %s (%0.3f)' % (id, definition, score)
 
-    print >>f
-    print >>f
+    print >> f
+    print >> f
     if 'children' in res:
         new_indent = indent + 1
         for child in res['children']:
@@ -198,7 +203,9 @@ def scheme_to_vsm(scheme):
             all_categories_meta[cnt] = k_2
             cnt = cnt + 1
 
-    def identity(lst): return lst
+    def identity(lst):
+        return lst
+
     category_vectorizer = TfidfVectorizer(analyzer=identity).fit(all_categories)
 
     cat_index = category_vectorizer.transform(all_categories)
@@ -211,7 +218,7 @@ def scheme_to_vsm(scheme):
     return result
 
 
-def clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator, 
+def clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator,
                     category_vectorizer):
     """
     :param labels: cluster assignment labels as returned by sklearn
@@ -223,7 +230,7 @@ def clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator,
     :param category_vectorizer:
     :rtype: ClusterVSM
     """
-    desc_ids = [d['cluster'] for d in selected_clusters]
+    desc_ids = [d.cluster for d in selected_clusters]
     relations = mlp_data.document_relations
 
     def counter_to_string(cnt, repeat=1):
@@ -249,10 +256,21 @@ def clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator,
                         clusters_representation=clusters_representation)
     return result
 
+
 def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clusters):
+    """
+
+    :param scheme:
+    :param labels:
+    :param mlp_data:
+    :param evaluator:
+    :param selected_clusters:
+    :type selected_clusters: list of nd.algorithm.evaluate.ClusterDescription
+    :return:
+    """
     scheme_vsm = scheme_to_vsm(scheme)
     cluster_vsm = clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator,
-                        scheme_vsm.category_vectorizer)
+                                  scheme_vsm.category_vectorizer)
 
     # cosine between scheme and clusters
     clus_cat_sim = (cluster_vsm.clusters_vec * scheme_vsm.scheme_vec.T).toarray()
@@ -260,7 +278,7 @@ def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clus
     best_similarity = clus_cat_sim.max(axis=1)
     clus_cat_assignment = clus_cat_sim.argmax(axis=1)
 
-    desc_ids = [d['cluster'] for d in selected_clusters]
+    desc_ids = [d.cluster for d in selected_clusters]
     namespaces = defaultdict(list)
     namespace_name = []
 
@@ -270,14 +288,14 @@ def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clus
 
         score = best_similarity[idx]
         common_keywords = set(cluster_vsm.clusters_representation[idx]) & \
-            set(scheme_vsm.all_categories[cat_id])
-    
+                          set(scheme_vsm.all_categories[cat_id])
+
         parent_cat, namespace_cat = scheme_vsm.all_categories_idx[cat_id]
         if score <= 0.2 or len(common_keywords) == 1:
             parent_cat = 'OTHER'
-    
+
         namespaces[parent_cat].append((namespace_cat, score, desc, common_keywords, cat_id))
-        namespace_name.append((desc['cluster'], (parent_cat, namespace_cat)))
+        namespace_name.append((desc.cluster, (parent_cat, namespace_cat)))
 
     namespaces = sorted(namespaces.items())
 
@@ -285,11 +303,11 @@ def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clus
 
     for parent_cat, groups in namespaces:
         parent_namespace = Namespace(parent_cat, ROOT)
-    
+
         for cat, score, desc, common, cat_id in groups:
             ns = Namespace(cat, parent_namespace)
-            ns.set_wiki_categories(desc['all_categories'])
-            
+            ns.set_wiki_categories(desc.all_categories)
+
             if parent_cat != 'OTHER':
                 schema_meta = scheme_vsm.all_categories_meta[cat_id]
                 ns._cat_reference = schema_meta
@@ -297,10 +315,10 @@ def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clus
                 no_ref = ClassificationCategory('NO_REFERENCE_CATEGORY', 'NO_CODE', 'NO_SCHEMA')
                 ns._cat_reference = no_ref
 
-            cluster_id = desc['cluster']
-            ns.set_additional_info(cluster_id, desc['purity'], score, common)
-    
-            all_def = evaluator.find_all_def(labels, cluster_id) 
+            cluster_id = desc.cluster
+            ns.set_additional_info(cluster_id, desc.purity, score, common)
+
+            all_def = evaluator.find_all_def(labels, cluster_id)
             all_items = sorted(all_def.items())
             ns.set_relations(all_items)
 
