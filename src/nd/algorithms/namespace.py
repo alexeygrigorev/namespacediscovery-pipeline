@@ -6,36 +6,23 @@ Created on Nov 8, 2015
 
 from collections import defaultdict
 
-import numpy as np
-
-from nltk.tokenize import word_tokenize
 from nltk.stem import SnowballStemmer
-snowball_stemmer = SnowballStemmer('english')
+from nltk.tokenize import word_tokenize
 
+from sklearn.feature_extraction.text import TfidfVectorizer
+import operator
+
+from nd.read.scheme import ClassificationCategory
 from nltk.corpus import stopwords
+
 ENGLISH_STOP_WORDS = set(stopwords.words('english') + 
                  ['etc', 'given', 'method', 'methods', 'theory', 'problem',
                   'problems', 'model', 'models'] + 
                  ['section'] + ['must', 'also'])
+snowball_stemmer = SnowballStemmer('english')
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-import operator 
-
-from nd.read.scheme import new_Category
 
 class Namespace():
-
-    _parent = None
-    _name = None
-    _identifiers = None
-    _children = None
-    _relations = None
-    _wiki_cats = None
-
-    _cluster_id = None
-
-    _cat_reference = None
-
     def __init__(self, name, parent=None):
         self._name = name
         self._children = []
@@ -43,6 +30,13 @@ class Namespace():
         if parent:
             self._parent = parent
             self._parent._children.append(self)
+
+        self._identifiers = None
+        self._relations = None
+        self._wiki_cats = None
+
+        self._cluster_id = None
+        self._cat_reference = None
 
     def set_wiki_categories(self, wiki_cats):
         self._wiki_cats = wiki_cats
@@ -102,32 +96,11 @@ class Namespace():
         dto = self.to_dict(evaluator)
         _print_dict(dto, evaluator, f, 1)
 
-    def print_ns(self, evaluator, indend=0, print_rels=0):
-        indend_str = ' ' * (4 * indend)
-        print indend_str, 'Category: %s' % self._name
-        if self._wiki_cats:
-            print indend_str, '          wiki categories:', 
-            print ', '.join('%s (%d)' % (cat, cnt) for cat, cnt in self._wiki_cats.most_common(3))
-        if self._cluster_id:
-            print indend_str, '          cluster_id: %d (matching score: %0.2f, purity: %0.2f)' % \
-                                    (self._cluster_id, self._matching_score, self._purity)
-            print indend_str, '          common:', ' '.join(self._matching_terms)
-
-        if print_rels and self._relations:
-            for id, def_list in self._relations:
-                print indend_str, '-',
-                print evaluator._string_def_list(id, def_list) 
-
-        print 
-        for child in self._children:
-            child.print_ns(evaluator, indend+1, print_rels=print_rels)
-            print
-
     def __repr__(self):
         return self._name
 
-def _print_dict(res, evaluator, f, indend=1):
-    capt = '=' * indend
+def _print_dict(res, evaluator, f, indent=1):
+    capt = '=' * indent
     print >>f, capt, res['category_name'], capt
 
     if 'reference_category' in res:
@@ -165,19 +138,48 @@ def _print_dict(res, evaluator, f, indend=1):
     print >>f
     print >>f
     if 'children' in res:
-        new_indend = indend + 1
+        new_indent = indent + 1
         for child in res['children']:
-            _print_dict(child, evaluator, f, new_indend)
+            _print_dict(child, evaluator, f, new_indent)
 
 
 class SchemeVSM():
-    cat_index = None
-    category_vectorizer = None
-    all_categories = None
-    all_categories_idx = None
-    all_categories_meta = None
+    def __init__(self, scheme_vec, category_vectorizer, all_categories,
+                 all_categories_idx, all_categories_meta):
+        """
+        :param scheme_vec: VSM built from terms of the scheme
+        :param category_vectorizer: vectorizer used for building the VSM
+        :param all_categories: tokens used for bulding the VSM
+        :param all_categories_idx: index of scheme_vec to name of the category
+        :param all_categories_meta: index of scheme_vec to meta information about category
+        """
+        self.scheme_vec = scheme_vec
+        self.category_vectorizer = category_vectorizer
+        self.all_categories = all_categories
+        self.all_categories_idx = all_categories_idx
+        self.all_categories_meta = all_categories_meta
+
+
+class ClusterVSM():
+    def __init__(self, clusters_vec, clusters_representation):
+        """
+        :param clusters_vec: clusters represented in the vector space (from SchemeVSM)
+        :param clusters_representation: actual tokens from which the VSM was built
+        """
+        self.clusters_vec = clusters_vec
+        self.clusters_representation = clusters_representation
+
 
 def scheme_to_vsm(scheme):
+    """
+    Converts the reference schemes (MSC, PACS, ACM) to Vector Space Model
+
+    :param scheme: reference scheme
+    :type scheme: dict
+    :returns: VSM representation of the scheme
+    :rtype: SchemeVSM
+    """
+
     all_categories = []
     all_categories_idx = {}
     all_categories_meta = {}
@@ -201,41 +203,34 @@ def scheme_to_vsm(scheme):
 
     cat_index = category_vectorizer.transform(all_categories)
 
-    result = SchemeVSM()
-    result.scheme_vec = cat_index
-    result.category_vectorizer = category_vectorizer
-    result.all_categories = all_categories
-    result.all_categories_idx = all_categories_idx
-    result.all_categories_meta = all_categories_meta
-
+    result = SchemeVSM(scheme_vec=cat_index,
+                       category_vectorizer=category_vectorizer,
+                       all_categories=all_categories,
+                       all_categories_idx=all_categories_idx,
+                       all_categories_meta=all_categories_meta)
     return result
 
-class ClusterVSM():
-    clus_index = None
-    clusters_representation = None
 
 def clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator, 
                     category_vectorizer):
-    # selected_clusters = evaluate.high_purity_clusters(cluster_assignment, threshold=0.8, all_categories=1, min_size=3)
+    """
+    :param labels: cluster assignment labels as returned by sklearn
+    :type labels:
+    :param selected_clusters: clusters with high purity
+    :type selected_clusters: list
+    :type mlp_data: nd.read.mlp_read.InputData
+    :type evaluator: nd.algorithms.evaluate.Evaluator
+    :param category_vectorizer:
+    :rtype: ClusterVSM
+    """
     desc_ids = [d['cluster'] for d in selected_clusters]
-    rels = mlp_data.document_relations
+    relations = mlp_data.document_relations
 
     def counter_to_string(cnt, repeat=1):
         if repeat:
             return ' '.join([(word + ' ') * cnt for word, cnt in cl_cats.items()])
         else:
             return ' '.join(cnt.keys())
-
-    def all_definitions(clustering, cluster_index):
-        indices, = np.where(clustering == cluster_index)
-
-        all_defs = []
-        for idx in indices: 
-            idx = int(idx)
-            for lst in rels[idx].values():
-                for d, _ in lst:
-                    all_defs.extend(d.split())
-        return all_defs
 
     clusters_representation = []
 
@@ -249,11 +244,9 @@ def clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator,
 
         clusters_representation.append(tokens)
 
-    clus_index = category_vectorizer.transform(clusters_representation)
-
-    result = ClusterVSM()
-    result.clusters_vec = clus_index
-    result.clusters_representation = clusters_representation
+    cluster_vec = category_vectorizer.transform(clusters_representation)
+    result = ClusterVSM(clusters_vec=cluster_vec,
+                        clusters_representation=clusters_representation)
     return result
 
 def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clusters):
@@ -298,13 +291,12 @@ def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clus
             ns.set_wiki_categories(desc['all_categories'])
             
             if parent_cat != 'OTHER':
-                shema_meta = scheme_vsm.all_categories_meta[cat_id]
-                ns._cat_reference = shema_meta
+                schema_meta = scheme_vsm.all_categories_meta[cat_id]
+                ns._cat_reference = schema_meta
             else:
-                no_ref = new_Category('NO_REFERENCE_CATEGORY', 'NO_CODE', 'NO_SCHEMA')
+                no_ref = ClassificationCategory('NO_REFERENCE_CATEGORY', 'NO_CODE', 'NO_SCHEMA')
                 ns._cat_reference = no_ref
 
-            # wiki_category = ns.most_common_wiki_cat()
             cluster_id = desc['cluster']
             ns.set_additional_info(cluster_id, desc['purity'], score, common)
     
@@ -313,7 +305,3 @@ def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clus
             ns.set_relations(all_items)
 
     return ROOT
-
-
-
-

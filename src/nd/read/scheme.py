@@ -10,9 +10,10 @@ log = logging.getLogger('nd.read')
 
 
 class ClassificationCategory():
-    full_name = None
-    code = None
-    source = None
+    def __init__(self, full_name, code, source):
+        self.full_name = full_name
+        self.code = code
+        self.source = source
 
     def to_dict(self):
         return {'full_name': self.full_name, 'code': self.code, 'source': self.source}
@@ -25,13 +26,6 @@ class ClassificationCategory():
 
     def __repr__(self):
         return '%s (%s/%s)' % (self.full_name, self.code, self.source)
-
-def new_Category(full_name, code, source):
-    cat = ClassificationCategory()
-    cat.full_name = full_name
-    cat.code = code
-    cat.source = source
-    return cat
 
 # because now keys are the category objects, we need helper methods to retrieve/delete
 # the items from the dictionaries by name
@@ -68,13 +62,13 @@ def read_msc(path):
             continue
 
         if tabs == 0:
-            top_parent = new_Category(name, code, 'MSC')
+            top_parent = ClassificationCategory(name, code, 'MSC')
             tree[top_parent] = {}
         elif tabs == 1:
-            parent = new_Category(name, code, 'MSC')
+            parent = ClassificationCategory(name, code, 'MSC')
             tree[top_parent][parent] = []
         else:
-            category = new_Category(name, code, 'MSC')
+            category = ClassificationCategory(name, code, 'MSC')
             tree[top_parent][parent].append(category)
 
     del_item_with_names(tree, ['General', 'History and biography', 'Mathematics education'])
@@ -149,16 +143,16 @@ def read_pacs(path):
             is_top_level = (top_code % 10 == 0) & (codes[1] == '00') & (codes[2] == '00')
 
         if is_top_level:
-            top_top_parent = new_Category(name, code, 'PACS')
+            top_top_parent = ClassificationCategory(name, code, 'PACS')
             tree_pacs[top_top_parent] = {}
         elif (codes[1] == '00') & (codes[2] == '00'):
-            top_parent = new_Category(name, code, 'PACS')
+            top_parent = ClassificationCategory(name, code, 'PACS')
             tree_pacs[top_top_parent][top_parent] = {}
         elif codes[2][0] in ['+', '-']:
-            parent = new_Category(name, code, 'PACS')
+            parent = ClassificationCategory(name, code, 'PACS')
             tree_pacs[top_top_parent][top_parent][parent] = []
         else: # tabs == 0
-            category = new_Category(name, code, 'PACS')
+            category = ClassificationCategory(name, code, 'PACS')
             tree_pacs[top_top_parent][top_parent][parent].append(category)
 
     del_item_with_names(tree_pacs, 'GENERAL')
@@ -218,7 +212,7 @@ def read_acm(path):
         return result
 
     def acm_cat(name):
-        return new_Category(name, 'NO_CODE', 'ACM')
+        return ClassificationCategory(name, 'NO_CODE', 'ACM')
 
     acm_tree = {}
 
