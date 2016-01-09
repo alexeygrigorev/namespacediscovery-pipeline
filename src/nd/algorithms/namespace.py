@@ -4,6 +4,7 @@ Created on Nov 8, 2015
 @author: alexey
 '''
 
+import numpy as np
 from collections import defaultdict
 
 from nltk.stem import SnowballStemmer
@@ -14,6 +15,11 @@ import operator
 
 from nd.read.scheme import ClassificationCategory
 from nltk.corpus import stopwords
+
+
+import logging
+log = logging.getLogger('nd.algorithms')
+
 
 ENGLISH_STOP_WORDS = set(stopwords.words('english') +
                          ['etc', 'given', 'method', 'methods', 'theory', 'problem',
@@ -77,16 +83,7 @@ class Namespace():
             res['matching_keywords'] = list(self._matching_terms)
 
         if self._relations:
-            relations = []
-            for identifier, def_list in self._relations:
-                definitions, score = def_list[0]
-                top_definition = definitions[0]
-                relation = {'identifier': identifier,
-                            'top_definition': top_definition,
-                            'top_definition_score': score,
-                            'all_definitions': definitions}
-                relations.append(relation)
-            res['relations'] = relations
+            res['relations'] = combine_relations(self._relations)
 
         children = []
         for child in self._children:
@@ -102,6 +99,19 @@ class Namespace():
 
     def __repr__(self):
         return self._name
+
+
+def combine_relations(relations):
+    combined = []
+    for identifier, def_list in relations:
+        definitions, score = def_list[0]
+        top_definition = definitions[0]
+        relation = {'identifier': identifier,
+                    'top_definition': top_definition,
+                    'top_definition_score': score,
+                    'all_definitions': definitions}
+        combined.append(relation)
+    return combined
 
 
 def _print_dict(res, evaluator, f, indent=1):
@@ -218,8 +228,8 @@ def scheme_to_vsm(scheme):
     return result
 
 
-def clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator,
-                    category_vectorizer):
+def pure_clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator,
+                         category_vectorizer):
     """
     :param labels: cluster assignment labels as returned by sklearn
     :type labels:
@@ -231,8 +241,10 @@ def clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator,
     :rtype: ClusterVSM
     """
     desc_ids = [d.cluster for d in selected_clusters]
-    relations = mlp_data.document_relations
+    return buid_cluster_vsm(labels, desc_ids, evaluator, category_vectorizer)
 
+
+def buid_cluster_vsm(labels, cluster_ids, evaluator, category_vectorizer):
     def counter_to_string(cnt, repeat=1):
         if repeat:
             return ' '.join([(word + ' ') * cnt for word, cnt in cl_cats.items()])
@@ -240,8 +252,7 @@ def clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator,
             return ' '.join(cnt.keys())
 
     clusters_representation = []
-
-    for cl_id in desc_ids:
+    for cl_id in cluster_ids:
         cl_titles, cl_cats = evaluator.cluster_details(labels, cl_id)
 
         document = ' '.join(cl_titles) + ' ' + counter_to_string(cl_cats)
@@ -250,7 +261,6 @@ def clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator,
         tokens = [t for t in tokens if t not in ENGLISH_STOP_WORDS]
 
         clusters_representation.append(tokens)
-
     cluster_vec = category_vectorizer.transform(clusters_representation)
     result = ClusterVSM(clusters_vec=cluster_vec,
                         clusters_representation=clusters_representation)
@@ -269,8 +279,8 @@ def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clus
     :return:
     """
     scheme_vsm = scheme_to_vsm(scheme)
-    cluster_vsm = clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator,
-                                  scheme_vsm.category_vectorizer)
+    cluster_vsm = pure_clusters_to_vsm(labels, selected_clusters, mlp_data, evaluator,
+                                       scheme_vsm.category_vectorizer)
 
     # cosine between scheme and clusters
     clus_cat_sim = (cluster_vsm.clusters_vec * scheme_vsm.scheme_vec.T).toarray()
@@ -323,3 +333,87 @@ def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clus
             ns.set_relations(all_items)
 
     return ROOT
+
+
+def namespaces_for_titles(scheme, labels, evaluator, mlp_data, doc_titles):
+    """
+    given a list of document titles, finds namespaces for them
+
+    TODO: these two methods share a lot of code - refactor it
+
+    :param scheme:
+    :param labels:
+    :param evaluator:
+    :type mlp_data: nd.read.mlp_read.InputData
+    :param doc_titles:
+    :return:
+    """
+    scheme_vsm = scheme_to_vsm(scheme)
+
+    cluster_ids = []
+    doc_titles_selected = []
+
+    for title in doc_titles:
+        if title in mlp_data.document_to_index:
+            doc_id = mlp_data.document_to_index[title]
+            doc_titles_selected.append(title)
+            cluster_ids.append(labels[doc_id])
+        else:
+            logging.info('cannot find index for document with title "%s", skipping it...' % title)
+
+    cluster_vsm = buid_cluster_vsm(labels, cluster_ids, evaluator,
+                                   scheme_vsm.category_vectorizer)
+
+    clus_cat_sim = (cluster_vsm.clusters_vec * scheme_vsm.scheme_vec.T).toarray()
+    best_similarity = clus_cat_sim.max(axis=1)
+    clus_cat_assignment = clus_cat_sim.argmax(axis=1)
+
+    result = []
+
+    for i, cluster_id in enumerate(range(len(cluster_ids))):
+        cat_id = clus_cat_assignment[cluster_id]
+        desc = evaluator.cluster_description(labels, cluster_ids[cluster_id])
+
+        score = best_similarity[cluster_id]
+        common_keywords = set(cluster_vsm.clusters_representation[cluster_id]) & \
+                          set(scheme_vsm.all_categories[cat_id])
+
+        parent_cat, namespace_cat = scheme_vsm.all_categories_idx[cat_id]
+        if score <= 0.2 or len(common_keywords) == 1:
+            namespace_name = 'OTHER'
+        else:
+            namespace_name = parent_cat + ' -- ' + namespace_cat
+
+        ns = Namespace(namespace_name, None)
+        ns.set_wiki_categories(desc.all_categories)
+
+        if namespace_name != 'OTHER':
+            schema_meta = scheme_vsm.all_categories_meta[cat_id]
+            ns._cat_reference = schema_meta
+        else:
+            no_ref = ClassificationCategory('NO_REFERENCE_CATEGORY', 'NO_CODE', 'NO_SCHEMA')
+            ns._cat_reference = no_ref
+
+        cluster_id = desc.cluster
+        ns.set_additional_info(cluster_id, desc.purity, score, common_keywords)
+
+        all_def = evaluator.find_all_def(labels, cluster_id)
+        all_items = sorted(all_def.items())
+        ns.set_relations(all_items)
+
+        result_dict = ns.to_dict(evaluator)
+        doc_title = doc_titles_selected[i]
+        result_dict['document_title'] = doc_title
+        result_dict['namespace_relations'] = result_dict['relations']
+        del result_dict['relations']
+
+        doc_id = mlp_data.document_to_index[doc_title]
+        doc_relations = evaluator.document_definitions(doc_id)
+        doc_relations = sorted(doc_relations.items())
+        result_dict['document_relations'] = combine_relations(doc_relations)
+
+        result_dict['other_documents'], _ = evaluator.cluster_details(labels, cluster_id)
+
+        result.append(result_dict)
+
+    return result

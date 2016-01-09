@@ -96,6 +96,17 @@ class Evaluator():
 
         return cluster_ids
 
+    def cluster_description(self, cluster_assignment, cluster_id):
+        indices, = np.where(cluster_assignment == cluster_id)
+        size = len(indices)
+
+        purity, category = self.cluster_purity(indices)
+        desc = ClusterDescription(cluster=cluster_id, purity=purity,
+                                  category=category, size=size,
+                                  all_categories=self.cluster_categories(indices))
+        return desc
+
+
     def combine_def(self, definition_list):
         key = lambda t: t[0].lower()
         sorted_by_def = sorted(definition_list, key=key)
@@ -151,8 +162,8 @@ class Evaluator():
 
             for np_idx in indices:
                 idx = int(np_idx)
-                for indent, definition in self.document_relations[idx].items():
-                    all_relations[indent].extend(definition)
+                for identifier, definition in self.document_relations[idx].items():
+                    all_relations[identifier].extend(definition)
 
         combined = {}
         for id, definitions in all_relations.items():
@@ -161,12 +172,27 @@ class Evaluator():
 
         return combined
 
+    def document_definitions(self, document_id, scorer=None):
+        all_relations = defaultdict(list)
+        for identifier, definition in self.document_relations[document_id].items():
+            all_relations[identifier].extend(definition)
+
+        combined = {}
+        for id, definitions in all_relations.items():
+            pre_combined = self.combine_def(definitions)
+            combined[id] = self.fuzzy_combine_def(pre_combined, scorer)
+
+        return combined
+
+
+    # UNUSED!
     def __fuzzy_list_name(self, list_names):
         if len(list_names) == 1:
             return list_names[0]
         else:
             return list_names[0] + '*'
 
+    # UNUSED!
     def _string_def_list(self, indent, def_list_fuzzy_combined):
         def_str = ['(%s: %0.2f)' % (self.__fuzzy_list_name(d), s) for (d, s) in def_list_fuzzy_combined]
         return '%s: %s' % (indent, ', '.join(def_str))

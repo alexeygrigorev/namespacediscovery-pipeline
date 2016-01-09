@@ -11,17 +11,16 @@ import codecs
 import luigi
 from luigi.file import LocalTarget
 
-from nd.flow.extra import InMemoryTask
 
 from nd.read import mlp_read, scheme
-
+from nd.read import gold_standard
 
 import nd.algorithms.ivs as ivs
 
 from nd.algorithms.cluster import cluster
 from nd.algorithms.dimred import dimred
 
-from nd.algorithms.namespace import assign_clusters_to_scheme
+from nd.algorithms import namespace
 from nd.algorithms.evaluate import create_evaluator
 
 
@@ -132,7 +131,6 @@ class LoadReferenceCategoriesTask(luigi.Task):
         return LocalTarget(self.cached_result)
 
 
-
 class BuildNamespacesTask(luigi.Task):
     cached_result = luigi.Parameter()
 
@@ -149,12 +147,11 @@ class BuildNamespacesTask(luigi.Task):
             merged_scheme = pickle.load(f)
 
         evaluator = create_evaluator(mlp_data)
-        pure_clusters = evaluator.high_purity_clusters(labels, 
+        pure_clusters = evaluator.high_purity_clusters(labels,
                 threshold=self.purity_threshold, min_size=self.min_size)
 
-        ROOT = assign_clusters_to_scheme(merged_scheme, labels, mlp_data, 
+        ROOT = assign_clusters_to_scheme(merged_scheme, labels, mlp_data,
                                          evaluator, pure_clusters)
-
         dto = ROOT.to_dict(evaluator)
 
         with codecs.open(self.output().path, 'w', 'utf-8') as f:
@@ -162,6 +159,35 @@ class BuildNamespacesTask(luigi.Task):
                 json.dump(dto, f, indent=2, sort_keys=True, ensure_ascii=False)
             elif self.format == 'wiki':
                 ROOT.to_wiki(evaluator, f)
+
+    def requires(self):
+        return {'ref': LoadReferenceCategoriesTask(),
+                'mlp': IdentifierVsmRepresentationTask(),
+                'cluster': ClusteringTask()}
+
+    def output(self):
+        return LocalTarget(self.cached_result)
+
+
+class NamespacesForGoldStandardTask(luigi.Task):
+    cached_result = luigi.Parameter()
+    gold_standard_file = luigi.Parameter()
+
+    def run(self):
+        with open(self.input()['mlp'].path, 'rb') as f:
+            mlp_data = pickle.load(f)
+        with open(self.input()['cluster'].path, 'rb') as f:
+            labels = pickle.load(f)
+        with open(self.input()['ref'].path, 'rb') as f:
+            merged_scheme = pickle.load(f)
+
+        evaluator = create_evaluator(mlp_data)
+
+        doc_titles = gold_standard.read_titles(self.gold_standard_file)
+        dtos = namespace.namespaces_for_titles(merged_scheme, labels, evaluator,
+                                                     mlp_data, doc_titles)
+        with codecs.open(self.output().path, 'w', 'utf-8') as f:
+            json.dump(dtos, f, indent=2, sort_keys=True, ensure_ascii=False)
 
 
     def requires(self):
@@ -180,4 +206,4 @@ if __name__ == "__main__":
     logging.getLogger('nd.algorithms').setLevel(logging.DEBUG)
     logging.getLogger('nd.utils').setLevel(logging.DEBUG)
 
-    luigi.run(main_task_cls=BuildNamespacesTask, local_scheduler=True)
+    luigi.run(main_task_cls=NamespacesForGoldStandardTask, local_scheduler=True)
