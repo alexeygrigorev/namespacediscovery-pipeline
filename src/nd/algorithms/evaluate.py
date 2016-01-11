@@ -152,7 +152,7 @@ class Evaluator():
         return resorted
 
     def find_all_def(self, cluster_assignment, cluster_ids, scorer=None):
-        if isinstance(cluster_ids, int):
+        if isinstance(cluster_ids, (int, np.int32)):
             cluster_ids = [cluster_ids]
 
         all_relations = defaultdict(list)
