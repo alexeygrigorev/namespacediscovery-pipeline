@@ -100,12 +100,20 @@ class Namespace():
     def __repr__(self):
         return self._name
 
+def is_link(definition):
+    return definition.startswith('[[') and definition.endswith(']]')
 
 def combine_relations(relations):
     combined = []
     for identifier, def_list in relations:
         definitions, score = def_list[0]
-        top_definition = definitions[0]
+        links = [d for d in definitions if is_link(d)]
+
+        if links:
+            top_definition = links[0]
+        else:
+            top_definition = definitions[0]
+
         relation = {'identifier': identifier,
                     'top_definition': top_definition,
                     'top_definition_score': score,
