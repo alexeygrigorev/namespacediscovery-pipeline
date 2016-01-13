@@ -150,7 +150,7 @@ class BuildNamespacesTask(luigi.Task):
         pure_clusters = evaluator.high_purity_clusters(labels,
                 threshold=self.purity_threshold, min_size=self.min_size)
 
-        ROOT = assign_clusters_to_scheme(merged_scheme, labels, mlp_data,
+        ROOT = namespace.assign_clusters_to_scheme(merged_scheme, labels, mlp_data,
                                          evaluator, pure_clusters)
         dto = ROOT.to_dict(evaluator)
 
@@ -206,4 +206,4 @@ if __name__ == "__main__":
     logging.getLogger('nd.algorithms').setLevel(logging.DEBUG)
     logging.getLogger('nd.utils').setLevel(logging.DEBUG)
 
-    luigi.run(main_task_cls=NamespacesForGoldStandardTask, local_scheduler=True)
+    luigi.run(main_task_cls=BuildNamespacesTask, local_scheduler=True)
