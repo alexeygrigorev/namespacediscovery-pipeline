@@ -4,18 +4,21 @@ Created on Nov 8, 2015
 @author: alexey
 '''
 
-import numpy as np
 from collections import defaultdict
+from collections import Counter
+
+from itertools import groupby
+import operator
+
+import numpy as np
 
 from nltk.stem import SnowballStemmer
 from nltk.tokenize import word_tokenize
-
-from sklearn.feature_extraction.text import TfidfVectorizer
-import operator
-
-from nd.read.scheme import ClassificationCategory
 from nltk.corpus import stopwords
 
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+from nd.read.scheme import ClassificationCategory
 
 import logging
 log = logging.getLogger('nd.algorithms')
@@ -275,6 +278,35 @@ def buid_cluster_vsm(labels, cluster_ids, evaluator, category_vectorizer):
     return result
 
 
+class NamespaceEntry():
+    def __init__(self, namespace_cat, score, desc, common_keywords, cat_id):
+        self.namespace_cat = namespace_cat
+        self.score = score
+        self.desc = desc
+        self.common_keywords = common_keywords
+        self.cat_id = cat_id
+        self.referenced = False
+        self.schema_meta = ClassificationCategory('NO_REFERENCE_CATEGORY', 'NO_CODE', 'NO_SCHEMA')
+
+    def reference_category(self):
+        if self.referenced:
+            return self.schema_meta.code
+        else:
+            return self.desc.all_categories
+
+def union(iterable):
+    res = set()
+    for s in iterable:
+        res.update(s)
+    return res
+
+
+def union_counter(iterable):
+    res = Counter()
+    for s in iterable:
+        res.update(s)
+    return res
+
 def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clusters):
     """
 
@@ -309,10 +341,15 @@ def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clus
                           set(scheme_vsm.all_categories[cat_id])
 
         parent_cat, namespace_cat = scheme_vsm.all_categories_idx[cat_id]
+        entry = NamespaceEntry(namespace_cat, score, desc, common_keywords, cat_id)
+
         if score <= 0.2 or len(common_keywords) == 1:
             parent_cat = 'OTHER'
+        else:
+            entry.schema_meta = scheme_vsm.all_categories_meta[cat_id]
+            entry.referenced = True
 
-        namespaces[parent_cat].append((namespace_cat, score, desc, common_keywords, cat_id))
+        namespaces[parent_cat].append(entry)
         namespace_name.append((desc.cluster, (parent_cat, namespace_cat)))
 
     namespaces = sorted(namespaces.items())
@@ -322,21 +359,26 @@ def assign_clusters_to_scheme(scheme, labels, mlp_data, evaluator, selected_clus
     for parent_cat, groups in namespaces:
         parent_namespace = Namespace(parent_cat, ROOT)
 
-        for cat, score, desc, common, cat_id in groups:
+        key = lambda e: e.reference_category()
+
+        sorted_groups = sorted(groups, key=key)
+        for k, values in groupby(sorted_groups, key=key):
+            values = list(values)
+            cat = values[0].namespace_cat
+            score = np.mean([e.score for e in values])
+            purity = np.mean([e.desc.purity for e in values])
+            common = union(e.common_keywords for e in values)
+            meta = values[0].schema_meta
+            wiki_categories = union_counter(e.desc.all_categories for e in values)
+
             ns = Namespace(cat, parent_namespace)
-            ns.set_wiki_categories(desc.all_categories)
+            ns.set_wiki_categories(wiki_categories)
+            ns._cat_reference = meta
 
-            if parent_cat != 'OTHER':
-                schema_meta = scheme_vsm.all_categories_meta[cat_id]
-                ns._cat_reference = schema_meta
-            else:
-                no_ref = ClassificationCategory('NO_REFERENCE_CATEGORY', 'NO_CODE', 'NO_SCHEMA')
-                ns._cat_reference = no_ref
+            cluster_ids = [e.desc.cluster for e in values]
+            ns.set_additional_info(cluster_ids, purity, score, common)
 
-            cluster_id = desc.cluster
-            ns.set_additional_info(cluster_id, desc.purity, score, common)
-
-            all_def = evaluator.find_all_def(labels, cluster_id)
+            all_def = evaluator.find_all_def(labels, cluster_ids)
             all_items = sorted(all_def.items())
             ns.set_relations(all_items)
 
